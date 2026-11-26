@@ -19,7 +19,7 @@ jobs:
     name: SAST Python (Bandit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
       - run: pip install bandit
@@ -32,7 +32,7 @@ jobs:
     name: SAST Java (SpotBugs + Find Security Bugs)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '21', cache: maven}
       - run: mvn -B -Psast -DskipTests compile spotbugs:check
@@ -53,7 +53,7 @@ jobs:
       security-events: write
     container: {image: semgrep/semgrep}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: >
           semgrep scan --metrics=off --error --sarif --output semgrep.sarif
           --config p/owasp-top-ten --config p/java --config p/python --config p/dockerfile --config p/secrets .
@@ -66,7 +66,7 @@ jobs:
     name: SCA Python (pip-audit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
       - run: pip install pip-audit
@@ -84,7 +84,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Bloquea: vulnerabilidades CRITICAL/HIGH con corrección disponible (pom.xml, pyproject, requirements) y SECRETOS.
       - uses: aquasecurity/trivy-action@0.28.0
         with:
@@ -112,7 +112,7 @@ jobs:
     name: SCA de la imagen del agente (Trivy)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with: {context: base/agent, push: false, load: true, tags: 'logistpulse-agent:ci'}
@@ -128,7 +128,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Requiere activar "Dependency graph" en Settings > Code security (ver docs/SEGURIDAD_CICD.md)
       - uses: actions/dependency-review-action@v4
         with: {fail-on-severity: high}
