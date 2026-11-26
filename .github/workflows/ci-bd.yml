@@ -18,7 +18,7 @@ jobs:
         working-directory: deberes/bases-de-datos
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - run: pip install pytest pglast
@@ -54,7 +54,7 @@ jobs:
         run: deberes/bases-de-datos/scripts/db_apply.sh
       - name: Controles de calidad (Data Trust Gate)
         run: deberes/bases-de-datos/scripts/db_check.sh
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Integración real agente ↔ Postgres (rol lp_agent, mínimo privilegio)

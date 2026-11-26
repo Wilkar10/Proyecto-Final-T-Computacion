@@ -19,7 +19,7 @@ jobs:
         working-directory: deberes/desarrollo-software
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - run: pip install pytest pyyaml
@@ -39,7 +39,7 @@ jobs:
           docker compose logs api; exit 1
       - name: Prueba de humo
         run: LAB_API_KEY=lab-dev-dispatcher-key bash base/lab/scripts/smoke.sh
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - run: pip install pytest pyyaml
