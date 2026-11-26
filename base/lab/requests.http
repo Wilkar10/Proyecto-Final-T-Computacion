@@ -1,0 +1,122 @@
+### Cliente REST: extensión "REST Client" (humao.rest-client) en VS Code / Codespaces.
+### Cambia @host si tu puerto no es 8080.
+@host = http://localhost:8080
+### En modo docker (perfil 'docker') el lab exige clave: dispatcher = leer y escribir; viewer = solo leer.
+@apiKey = lab-dev-dispatcher-key
+
+### Salud
+GET {{host}}/actuator/health
+X-Api-Key: {{apiKey}}
+
+### Flota
+GET {{host}}/api/robots
+X-Api-Key: {{apiKey}}
+
+### Plano del almacén
+GET {{host}}/api/routes/grid
+X-Api-Key: {{apiKey}}
+
+### Ruta A* de (0,0) a (11,7)
+GET {{host}}/api/routes?fromX=0&fromY=0&toX=11&toY=7
+X-Api-Key: {{apiKey}}
+
+### Ruta a una celda bloqueada -> 422
+GET {{host}}/api/routes?fromX=0&fromY=0&toX=1&toY=1
+X-Api-Key: {{apiKey}}
+
+### Pedidos paginados (con enlaces HATEOAS)
+GET {{host}}/api/orders?page=0&size=2
+X-Api-Key: {{apiKey}}
+
+### Filtrar por estado
+GET {{host}}/api/orders?status=CREATED
+X-Api-Key: {{apiKey}}
+
+### Crear pedido
+POST {{host}}/api/orders
+X-Api-Key: {{apiKey}}
+Content-Type: application/json
+
+{ "customer": "Tiendas Tía Cumbayá", "destX": 10, "destY": 5 }
+
+### Validación -> 400 (cliente vacío)
+POST {{host}}/api/orders
+X-Api-Key: {{apiKey}}
+Content-Type: application/json
+
+{ "customer": "", "destX": 3, "destY": 0 }
+
+### Despachar el pedido 1 (asigna AMR, calcula ruta y ETA)
+POST {{host}}/api/orders/1/dispatch
+X-Api-Key: {{apiKey}}
+
+### Despachar otra vez -> 409 (transición ilegal)
+POST {{host}}/api/orders/1/dispatch
+X-Api-Key: {{apiKey}}
+
+### Pasar a IN_TRANSIT (en modo docker lo hace solo el consumidor de RabbitMQ)
+POST {{host}}/api/orders/1/transitions
+X-Api-Key: {{apiKey}}
+Content-Type: application/json
+
+{ "to": "IN_TRANSIT" }
+
+### Entregar
+POST {{host}}/api/orders/1/transitions
+X-Api-Key: {{apiKey}}
+Content-Type: application/json
+
+{ "to": "DELIVERED" }
+
+### Saltarse estados -> 409
+POST {{host}}/api/orders/2/transitions
+X-Api-Key: {{apiKey}}
+Content-Type: application/json
+
+{ "to": "DELIVERED" }
+
+### Pedido con transportista lento (WireMock tarda 5 s; el cliente corta a los 2 s y degrada)
+POST {{host}}/api/orders
+X-Api-Key: {{apiKey}}
+Content-Type: application/json
+
+{ "code": "LP-SLOW1", "customer": "Prueba timeout", "destX": 5, "destY": 3 }
+
+###
+POST {{host}}/api/orders/4/dispatch
+X-Api-Key: {{apiKey}}
+
+### Cargar batería del robot 5
+POST {{host}}/api/robots/5/charge
+X-Api-Key: {{apiKey}}
+
+### Métricas Prometheus
+GET {{host}}/actuator/prometheus
+X-Api-Key: {{apiKey}}
+
+### Inventario / reposición / packing
+GET http://localhost:8080/api/stock?belowMin=true
+
+###
+GET http://localhost:8080/api/stock/suggestions
+
+###
+POST http://localhost:8080/api/purchase-orders
+Idempotency-Key: po-demo-1
+Content-Type: application/json
+
+{"sku":"SKU-01","qty":40,"proposedBy":"estudiante"}
+
+###
+POST http://localhost:8080/api/purchase-orders/1/approve
+X-Approver: gerente
+
+###
+POST http://localhost:8080/api/purchase-orders/1/receive
+
+###
+POST http://localhost:8080/api/packing-jobs
+Idempotency-Key: pack-demo-1
+Content-Type: application/json
+
+{"orderCode":"LP-DEMO01","lines":[{"sku":"SKU-01","qty":2},{"sku":"SKU-04","qty":3}]}

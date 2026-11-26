@@ -1,0 +1,97 @@
+asyncapi: 2.6.0
+info:
+  title: LOGISTPULSE · Eventos de dominio
+  version: 1.0.0
+  description: |
+    Patrón: orientado a eventos con Outbox, entrega al-menos-una-vez (los consumidores deduplican por eventId).
+    Mismo envelope que Smart Inventory (eventId, eventType, schemaVersion, occurredAt, correlationId, producer, payload).
+servers:
+  local:
+    url: rabbitmq:5672
+    protocol: amqp
+    description: RabbitMQ del docker-compose (AMQP 0-9-1)
+defaultContentType: application/json
+channels:
+  order.dispatched:
+    description: Un pedido pasó a DISPATCHED dentro de un viaje.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: {name: logistpulse.events, type: topic, durable: true}
+    publish:
+      operationId: publishOrderDispatched
+      message: {$ref: '#/components/messages/OrderDispatched'}
+  trip.created:
+    description: Un viaje multi-parada se creó de forma atómica.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: {name: logistpulse.events, type: topic, durable: true}
+    publish:
+      operationId: publishTripCreated
+      message: {$ref: '#/components/messages/TripCreated'}
+  proposal.created:
+    description: El agente generó una propuesta (aún sin ejecutar).
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: {name: logistpulse.events, type: topic, durable: true}
+    publish:
+      operationId: publishProposalCreated
+      message: {$ref: '#/components/messages/ProposalEvent'}
+  proposal.decided:
+    description: Un humano aprobó o rechazó la propuesta.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: {name: logistpulse.events, type: topic, durable: true}
+    publish:
+      operationId: publishProposalDecided
+      message: {$ref: '#/components/messages/ProposalEvent'}
+  stock.low:
+    description: Un SKU quedó bajo su mínimo disponible.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: {name: logistpulse.events, type: topic, durable: true}
+    publish:
+      operationId: publishStockLow
+      message: {$ref: '#/components/messages/StockLow'}
+  purchase.received:
+    description: Llegó una orden de compra y el saldo aumentó.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: {name: logistpulse.events, type: topic, durable: true}
+    publish:
+      operationId: publishPurchaseReceived
+      message: {$ref: '#/components/messages/PurchaseReceived'}
+  order.packed:
+    description: Un pedido se empacó (stock descontado, cajas definidas); listo para despachar.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: {name: logistpulse.events, type: topic, durable: true}
+    publish:
+      operationId: publishOrderPacked
+      message: {$ref: '#/components/messages/OrderPacked'}
+components:
+  messages:
+    OrderDispatched:
+      name: order.dispatched
+      payload: {$ref: '../schemas/order-dispatched.v1.json'}
+    TripCreated:
+      name: trip.created
+      payload: {$ref: '../schemas/trip-created.v1.json'}
+    ProposalEvent:
+      name: proposal.event
+      payload: {$ref: '../schemas/proposal-event.v1.json'}
+    StockLow:
+      name: stock.low
+      payload: {$ref: '../schemas/stock-low.v1.json'}
+    PurchaseReceived:
+      name: purchase.received
+      payload: {$ref: '../schemas/purchase-received.v1.json'}
+    OrderPacked:
+      name: order.packed
+      payload: {$ref: '../schemas/order-packed.v1.json'}

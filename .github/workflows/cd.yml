@@ -1,0 +1,66 @@
+name: cd
+# Entrega continua: al crear una etiqueta vX.Y.Z se construyen y publican las imágenes en GHCR.
+# Después de publicar las imágenes, `deploy-staging` exige aprobación manual (environment: staging), verifica salud y documenta la reversa.
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: read
+  packages: write
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: lab
+            context: base/lab
+          - name: agent
+            context: base/agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=sha
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+  deploy-staging:
+    needs: images
+    runs-on: ubuntu-latest
+    environment: staging          # configurar en GitHub: revisores requeridos = aprobación manual
+    steps:
+      - uses: actions/checkout@v4
+      - name: "Desplegar (ejemplo, sustituir por su destino real)"
+        run: |
+          echo "Desplegando ${GITHUB_REF_NAME} en staging"
+          echo "Imagen lab:   ghcr.io/${GITHUB_REPOSITORY}/lab:${GITHUB_REF_NAME#v}"
+          echo "Imagen agent: ghcr.io/${GITHUB_REPOSITORY}/agent:${GITHUB_REF_NAME#v}"
+      - name: "Verificación posterior al despliegue (health check con reintentos)"
+        env:
+          STAGING_URL: ${{ vars.STAGING_URL }}
+        run: |
+          test -n "$STAGING_URL" || { echo "Defina la variable STAGING_URL del environment staging"; exit 1; }
+          for i in $(seq 1 12); do
+            curl -fsS "$STAGING_URL/actuator/health" && exit 0
+            sleep 10
+          done
+          echo "Health check fallido: ver estrategia de reversa"; exit 1
+      - name: "Reversa (solo si falló el despliegue o el health check)"
+        if: failure()
+        run: |
+          echo "REVERSA: redesplegar el tag anterior (imágenes inmutables por tag/sha); no se reconstruye nada."
+          echo "Datos: las migraciones deben ser compatibles hacia atrás (expand/contract)."

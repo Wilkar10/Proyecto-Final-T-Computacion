@@ -1,0 +1,7 @@
+# Cambios sensibles requieren revisión del equipo dueño (ajustar a sus usuarios/equipos de GitHub).
+/.github/                 @roberto-andrade
+/base/lakehouse/sql/      @roberto-andrade
+/base/lab/src/            @roberto-andrade
+/base/agent/lpagent/validator.py @roberto-andrade
+/base/gateway/           @roberto-andrade
+/contracts/               @roberto-andrade

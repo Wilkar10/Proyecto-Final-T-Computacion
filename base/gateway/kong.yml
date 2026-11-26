@@ -1,0 +1,96 @@
+# Gateway / API manager de LOGISTPULSE (Kong en modo DB-less: la configuración es ESTE archivo, versionado en git).
+# Punto único de entrada :8000. Publica las APIs con URL versionada y aplica, ANTES de llegar al servicio:
+#   identidad (key-auth) -> permisos (acl: read/write) -> límite de tasa por consumidor -> correlación (X-Request-Id).
+# Las claves de abajo son de DESARROLLO (las mismas que usa el lab en el perfil docker). Fuera del aula se rotan.
+# Contrato ↔ gateway: ver contracts/catalog.yaml (sección gateway) y contracts/tests/test_gateway.py (detecta desvíos).
+_format_version: "3.0"
+_transform: true
+
+consumers:
+  - username: dispatcher
+    keyauth_credentials: [{key: lab-dev-dispatcher-key}]
+    acls: [{group: read}, {group: write}]
+  - username: viewer
+    keyauth_credentials: [{key: lab-dev-viewer-key}]
+    acls: [{group: read}]
+
+services:
+  # API pública /api/v1/**  ->  servicio fleet-orders (interno: /api/**)
+  - name: fleet-orders
+    url: http://api:8080/api
+    connect_timeout: 3000
+    read_timeout: 15000
+    write_timeout: 15000
+    retries: 0                       # reintentar un POST no idempotente sería peligroso; /api/trips usa Idempotency-Key
+    routes:
+      - name: fleet-orders-read
+        paths: [/api/v1]
+        methods: [GET, HEAD, OPTIONS]
+        strip_path: true
+        plugins:
+          - {name: acl, config: {allow: [read]}}
+      - name: fleet-orders-write
+        paths: [/api/v1]
+        methods: [POST, PUT, PATCH, DELETE]
+        strip_path: true
+        plugins:
+          - {name: acl, config: {allow: [write]}}
+    plugins:
+      - name: key-auth
+        config: {key_names: [X-Api-Key], hide_credentials: false, key_in_header: true, key_in_query: false, key_in_body: false}
+      - name: rate-limiting
+        config:
+          second: 10                 # = lab.security.rate-limit.refill-per-second; la ráfaga (20) la absorbe el lab
+          policy: local              # una sola instancia de gateway; con varias, policy: redis
+          limit_by: consumer
+          fault_tolerant: true
+          hide_client_headers: false
+          error_code: 429
+          error_message: RATE_LIMITED
+
+  # API pública /decision/v1/**  ->  servicio dispatch-decision (agente, interno: /**)
+  - name: dispatch-decision
+    url: http://agent:8090
+    connect_timeout: 3000
+    read_timeout: 30000
+    write_timeout: 15000
+    retries: 0
+    routes:
+      - name: dispatch-decision-read
+        paths: [/decision/v1]
+        methods: [GET, HEAD, OPTIONS]
+        strip_path: true
+        plugins:
+          - {name: acl, config: {allow: [read]}}
+      - name: dispatch-decision-write
+        paths: [/decision/v1]
+        methods: [POST, PUT, PATCH, DELETE]
+        strip_path: true
+        plugins:
+          - {name: acl, config: {allow: [write]}}
+    plugins:
+      - name: key-auth
+        config: {key_names: [X-Api-Key], hide_credentials: false, key_in_header: true, key_in_query: false, key_in_body: false}
+      - name: rate-limiting
+        config:
+          second: 10
+          policy: local
+          limit_by: consumer
+          fault_tolerant: true
+          hide_client_headers: false
+          error_code: 429
+          error_message: RATE_LIMITED
+
+# Plugins globales (todas las rutas)
+plugins:
+  - name: correlation-id
+    config: {header_name: X-Request-Id, generator: uuid, echo_downstream: true}
+  - name: request-size-limiting
+    config: {allowed_payload_size: 1, size_unit: megabytes}
+  - name: response-transformer
+    config:
+      add:
+        headers:
+          - "X-Content-Type-Options:nosniff"
+          - "Cache-Control:no-store"
+          - "Referrer-Policy:no-referrer"

@@ -1,0 +1,3 @@
+pedido_codigo,fecha_pedido,fecha_prometida,fecha_entrega_real,tipo_cliente,zona,volumen_o_peso,unidad_transporte,estado_final,motivo_falla,costo_entrega_usd
+P0001,2026-01-05 08:30,2026-01-06 12:00,2026-01-06 10:40,MAYORISTA,QUITO-NORTE,1200,UNIDAD-03,ENTREGADO,,38.50
+P0002,2026-01-05 09:10,2026-01-05 18:00,2026-01-06 09:00,SUPERMERCADO,QUITO-SUR,800,UNIDAD-01,FALLIDO,FALTA_PRODUCTO,0

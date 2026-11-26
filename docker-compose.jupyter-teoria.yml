@@ -1,0 +1,8 @@
+# Añade al JupyterLab del lakehouse el notebook y el código del deber de Teoría.
+# Uso:  make lab-teoria   (equivale a: docker compose -f docker-compose.yml -f docker-compose.jupyter-teoria.yml --profile lab up -d jupyter)
+services:
+  jupyter:
+    volumes:
+      - ./deberes/teoria-computacion/notebooks:/notebooks/teoria
+      - ./deberes/teoria-computacion/np_lab:/teoria/np_lab:ro
+      - ./base/agent/lpagent:/agent/lpagent:ro

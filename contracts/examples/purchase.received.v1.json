@@ -1,0 +1,1 @@
+{"eventId": "7f0c1a52-0102", "eventType": "purchase.received", "schemaVersion": 1, "occurredAt": "2026-11-24T14:10:00Z", "correlationId": "req-9001", "producer": "inventory-replenishment", "payload": {"poId": 5, "sku": "SKU-01", "qty": 66}}

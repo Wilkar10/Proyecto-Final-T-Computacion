@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "stock-low.v1.json",
+  "title": "Payload de stock.low v1",
+  "type": "object",
+  "required": [
+    "sku",
+    "available",
+    "minStock"
+  ],
+  "properties": {
+    "sku": {
+      "type": "string"
+    },
+    "available": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "minStock": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false
+}

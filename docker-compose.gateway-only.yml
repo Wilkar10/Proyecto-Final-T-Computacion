@@ -1,0 +1,9 @@
+# Modo "solo por el gateway": el lab y el agente dejan de publicar sus puertos al host (8080 y 8090).
+# Así la única entrada es http://localhost:8000 y nadie puede saltarse la clave ni el límite de tasa desde fuera.
+#   docker compose -f docker-compose.yml -f docker-compose.gateway-only.yml --profile gateway --profile agent up -d --build
+# (La UI del lab y Prometheus necesitan 8080 / red interna: Prometheus ya llega por la red de compose.)
+services:
+  api:
+    ports: !reset []
+  agent:
+    ports: !reset []

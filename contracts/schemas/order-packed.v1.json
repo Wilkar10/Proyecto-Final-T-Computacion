@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "order-packed.v1.json",
+  "title": "Payload de order.packed v1",
+  "type": "object",
+  "required": [
+    "jobId",
+    "orderCode",
+    "boxCount",
+    "fillPct"
+  ],
+  "properties": {
+    "jobId": {
+      "type": "integer"
+    },
+    "orderCode": {
+      "type": "string"
+    },
+    "boxCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "fillPct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    }
+  },
+  "additionalProperties": false
+}

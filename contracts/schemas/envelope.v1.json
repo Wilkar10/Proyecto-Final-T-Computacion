@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "envelope.v1.json",
+  "title": "Envelope de evento LOGISTPULSE v1",
+  "type": "object",
+  "required": ["eventId", "eventType", "schemaVersion", "occurredAt", "correlationId", "producer", "payload"],
+  "properties": {
+    "eventId": {"type": "string", "minLength": 8, "description": "Único por evento: los consumidores deduplican con él (entrega al-menos-una-vez)"},
+    "eventType": {"type": "string", "pattern": "^[a-z]+\\.[a-z-]+$"},
+    "schemaVersion": {"type": "integer", "minimum": 1},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "correlationId": {"type": "string", "minLength": 1},
+    "producer": {"type": "string", "enum": ["fleet-orders", "dispatch-decision", "inventory-replenishment"]},
+    "payload": {"type": "object"}
+  },
+  "additionalProperties": false
+}

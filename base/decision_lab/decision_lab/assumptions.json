@@ -1,0 +1,96 @@
+{
+  "_aviso": "TODOS los valores son SUPUESTOS ilustrativos para que el modelo corra. Sustitúyalos por datos reales (p. ej. de la operación de DANEC) antes de afirmar ahorros. Cada equipo debe justificar o corregir los que use.",
+  "orders_per_day": 30,
+  "arrival_window_min": 480,
+  "horizon_min": 1440,
+  "wave_min": 30,
+  "min_per_cost_unit": 2.0,
+  "robots": 5,
+  "charge_threshold": 40,
+  "charge_min": 60,
+  "segments": {
+    "CORPORATE": {
+      "share": 0.2,
+      "priority": 3,
+      "sla_min": 120
+    },
+    "PYME": {
+      "share": 0.3,
+      "priority": 2,
+      "sla_min": 180
+    },
+    "RETAIL": {
+      "share": 0.5,
+      "priority": 1,
+      "sla_min": 240
+    }
+  },
+  "manual": {
+    "group_size": 4,
+    "cost_underestimate": 0.25,
+    "error_rate": 0.03,
+    "abort_fraction": 0.5,
+    "abort_min": 30,
+    "rework_delay_min": 90,
+    "plan_min_per_order": 4.0
+  },
+  "system": {
+    "max_stops": 8,
+    "error_rate": 0.005,
+    "review_min_per_trip": 2.0
+  },
+  "autonomy": {
+    "_aviso": "Solo se usa con --autonomia. Supuestos ILUSTRATIVOS sobre el costo y el beneficio de que una persona apruebe cada viaje (nivel 1) o solo los de mayor riesgo (nivel 2).",
+    "approval_delay_min": 20,
+    "approval_min_per_trip": 3.0,
+    "human_catch_rate": 0.5,
+    "low_risk_max_stops": 3,
+    "low_risk_battery_margin": 10
+  },
+  "money": {
+    "cost_per_cost_unit_usd": 0.06,
+    "rework_cost_per_failed_order_usd": 6.0,
+    "late_penalty_per_order_usd": 4.0,
+    "planner_hourly_usd": 7.5,
+    "working_days_per_month": 22,
+    "holding_usd_per_unit_day": 0.03,
+    "box_usd": 0.35,
+    "po_fixed_usd": 4.0,
+    "stockout_cost_per_order_usd": 8.0,
+    "buyer_hourly_usd": 6.0,
+    "packer_hourly_usd": 4.5
+  },
+  "cadena": {
+    "_aviso": "SUPUESTOS ilustrativos de la cadena inventario→pedidos→reposición→packing. Cámbienlos con datos reales (ver docs/SOLICITUD_DATOS_DANEC.md, bloque B).",
+    "skus": 12,
+    "lines_per_order": [
+      1,
+      4
+    ],
+    "qty_per_line": [
+      1,
+      3
+    ],
+    "box_capacity": 10,
+    "initial_cover_days": 8,
+    "lead_time_days": 2,
+    "manual": {
+      "review_every_days": 5,
+      "order_up_to_days": 6,
+      "forecast_bias": -0.25,
+      "min_per_sku_review": 1.5,
+      "pack_min_fixed": 4.0,
+      "pack_min_per_box": 2.0,
+      "pack_error_rate": 0.03
+    },
+    "sistema": {
+      "safety_days": 2.0,
+      "order_up_to_days": 6,
+      "window_days": 7,
+      "min_per_po_review": 1.0,
+      "pack_min_fixed": 1.5,
+      "pack_min_per_box": 1.2,
+      "pack_error_rate": 0.005
+    }
+  }
+}

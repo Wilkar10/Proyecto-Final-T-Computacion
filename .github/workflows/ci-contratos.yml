@@ -1,0 +1,33 @@
+name: ci-contratos
+on:
+  push:
+    branches: [main]
+    paths: ['contracts/**', 'base/agent/**', 'base/lab/src/main/**', 'base/gateway/**', 'docker-compose*.yml']
+  pull_request:
+    paths: ['contracts/**', 'base/agent/**', 'base/lab/src/main/**', 'base/gateway/**', 'docker-compose*.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-contratos-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contratos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pytest pyyaml jsonschema
+      - name: Validar contratos y compatibilidad contra la línea base
+        run: python contracts/tools/validate_contracts.py
+      - name: Pruebas de contrato (agente real contra su OpenAPI) + coherencia gateway↔lab↔contrato + humo de seguridad contra un servidor falso
+        run: PYTHONPATH=base/agent python -m pytest contracts/tests -q
+  lint-openapi:
+    # Segunda opinión con herramienta estándar (Spectral). Informativo: no bloquea.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - run: npx --yes @stoplight/spectral-cli lint -r contracts/.spectral.yaml 'contracts/openapi/*.yaml' 'contracts/asyncapi/*.yaml'

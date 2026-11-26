@@ -1,0 +1,3 @@
+{"eventId": "7f0c1a52-0001", "eventType": "order.dispatched", "schemaVersion": 1, "occurredAt": "2026-11-24T14:05:00Z",
+ "correlationId": "req-8841", "producer": "fleet-orders",
+ "payload": {"orderCode": "LP-DEMO01", "robot": "AMR-01", "tripId": 17}}

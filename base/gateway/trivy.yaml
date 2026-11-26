@@ -1,0 +1,8 @@
+# Configuración de Trivy para el escaneo del repositorio (ver .github/workflows/ci-seguridad-sast.yml).
+# Las claves de DESARROLLO (lab-dev-*) están en el repositorio a propósito: no son secretos reales.
+scan:
+  skip-dirs:
+    - contracts/baseline
+    - node_modules
+secret:
+  config: base/gateway/trivy-secret.yaml

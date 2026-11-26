@@ -1,0 +1,279 @@
+openapi: 3.0.3
+info:
+  title: LOGISTPULSE · Inventario, reposición y packing
+  version: 1.0.0
+  description: |
+    Contexto acotado "Inventario, reposición y packing" (etapas 1, 3 y 4 de la cadena). Contrato-primero: este archivo manda.
+    Hoy lo implementa el mismo servicio base/lab (monolito modular) bajo /api/stock, /api/purchase-orders y /api/packing-jobs;
+    el gateway las publica como /api/v1/** con el mismo X-Api-Key y límite de tasa que fleet-orders.
+    El sistema SUGIERE compras (/api/stock/suggestions); una persona las crea y las aprueba.
+servers:
+  - {url: "http://localhost:8080", description: "directo al servicio (docker compose; en modo docker también exige X-Api-Key)"}
+security:
+  - ApiKey: []
+x-gateway: {public_base_path: /api/v1, upstream_prefix: /api, enforced_by: [gateway, service]}
+paths:
+  /api/stock:
+    get:
+      operationId: listStock
+      x-required-scope: read
+      summary: "Lista el saldo de cada SKU (opcionalmente solo los que están bajo el mínimo)"
+      parameters:
+        - {name: belowMin, in: query, required: false, schema: {type: boolean, default: false}}
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '200': {description: "Saldos", content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/StockItem'}}}}}
+  /api/stock/suggestions:
+    get:
+      operationId: suggestPurchases
+      x-required-scope: read
+      summary: "SUGIERE compras para los SKU bajo el mínimo. No crea nada: una persona decide y registra la orden"
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '200': {description: "Sugerencias (puede ser vacío)", content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/PurchaseSuggestion'}}}}}
+  /api/stock/{sku}:
+    get:
+      operationId: getStock
+      x-required-scope: read
+      summary: "Saldo de un SKU"
+      parameters:
+        - {name: sku, in: path, required: true, schema: {type: string, example: SKU-01}}
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '200': {description: "Saldo", content: {application/json: {schema: {$ref: '#/components/schemas/StockItem'}}}}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/stock/{sku}/movements:
+    post:
+      operationId: registerMovement
+      x-required-scope: write
+      summary: "Registra un ingreso (RECEIPT) o un ajuste (ADJUST). El libro es de solo inserción: los errores se compensan con otro movimiento"
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 64}}
+        - {name: sku, in: path, required: true, schema: {type: string, example: SKU-01}}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/MovementInput'}}}
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '201': {description: "Movimiento registrado; devuelve el saldo", content: {application/json: {schema: {$ref: '#/components/schemas/StockItem'}}}}
+        '200': {description: "Repetición con la misma Idempotency-Key (Idempotent-Replay)", content: {application/json: {schema: {$ref: '#/components/schemas/StockItem'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/purchase-orders:
+    get:
+      operationId: listPurchaseOrders
+      x-required-scope: read
+      summary: "Lista órdenes de compra"
+      parameters:
+        - {name: status, in: query, required: false, schema: {$ref: '#/components/schemas/PurchaseStatus'}}
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '200': {description: "Órdenes", content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/PurchaseOrder'}}}}}
+    post:
+      operationId: proposePurchaseOrder
+      x-required-scope: write
+      summary: "Crea una orden de compra en estado PROPOSED (la aprueba una persona)"
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 64}}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/PurchaseOrderInput'}}}
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '201': {description: "Orden creada", content: {application/json: {schema: {$ref: '#/components/schemas/PurchaseOrder'}}}}
+        '200': {description: "Repetición con la misma Idempotency-Key (Idempotent-Replay)", content: {application/json: {schema: {$ref: '#/components/schemas/PurchaseOrder'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/purchase-orders/{id}/approve:
+    post:
+      operationId: approvePurchaseOrder
+      x-required-scope: write
+      summary: "Una persona aprueba la orden (PROPOSED → APPROVED). X-Approver es texto sin autenticar: el gateway autentica clientes, no personas"
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+        - {name: X-Approver, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 60}}
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '200': {description: "Orden aprobada", content: {application/json: {schema: {$ref: '#/components/schemas/PurchaseOrder'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/purchase-orders/{id}/receive:
+    post:
+      operationId: receivePurchaseOrder
+      x-required-scope: write
+      summary: "Registra la llegada de la mercadería (APPROVED → RECEIVED) y suma el ingreso al saldo, todo o nada"
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '200': {description: "Orden recibida", content: {application/json: {schema: {$ref: '#/components/schemas/PurchaseOrder'}}}}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/packing-jobs:
+    post:
+      operationId: packOrder
+      x-required-scope: write
+      summary: "Empaca un pedido CREATED: descuenta stock y acomoda las piezas en cajas (first-fit decreasing). Todo o nada: si falta producto responde 409 y no cambia nada"
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 64}}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/PackingInput'}}}
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '201': {description: "Pedido empacado; emite order.packed", content: {application/json: {schema: {$ref: '#/components/schemas/PackingJob'}}}}
+        '200': {description: "Repetición con la misma Idempotency-Key (Idempotent-Replay)", content: {application/json: {schema: {$ref: '#/components/schemas/PackingJob'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/packing-jobs/{id}:
+    get:
+      operationId: getPackingJob
+      x-required-scope: read
+      summary: "Detalle de un empaque"
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '200': {description: "Empaque", content: {application/json: {schema: {$ref: '#/components/schemas/PackingJob'}}}}
+        '404': {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: |
+        Clave por cliente, validada por el gateway (y por el servicio como defensa en profundidad).
+        Permisos: `read` = GET/HEAD/OPTIONS; `write` = POST/PUT/PATCH/DELETE (ver `x-required-scope` en cada operación).
+  schemas:
+    StockItem:
+      type: object
+      required: [sku, name, onHand, reserved, available, minStock, maxStock, belowMin]
+      properties:
+        sku: {type: string, example: SKU-01}
+        name: {type: string}
+        unitVolume: {type: integer, minimum: 1}
+        onHand: {type: integer, minimum: 0}
+        reserved: {type: integer, minimum: 0}
+        available: {type: integer, minimum: 0, description: onHand - reserved}
+        minStock: {type: integer, minimum: 0}
+        maxStock: {type: integer}
+        leadTimeDays: {type: integer, minimum: 0}
+        belowMin: {type: boolean}
+    MovementInput:
+      type: object
+      required: [kind, qty]
+      additionalProperties: false
+      properties:
+        kind: {type: string, enum: [RECEIPT, ADJUST]}
+        qty: {type: integer, description: "RECEIPT > 0; ADJUST con signo (no puede dejar el saldo bajo cero)"}
+        ref: {type: string, maxLength: 40}
+    PurchaseSuggestion:
+      type: object
+      required: [sku, available, onOrder, suggestedQty]
+      properties:
+        sku: {type: string}
+        available: {type: integer}
+        onOrder: {type: integer, minimum: 0}
+        suggestedQty: {type: integer, minimum: 1, description: "cantidad para llegar al máximo del SKU"}
+    PurchaseStatus: {type: string, enum: [PROPOSED, APPROVED, RECEIVED, REJECTED]}
+    PurchaseOrderInput:
+      type: object
+      required: [sku, qty]
+      additionalProperties: false
+      properties:
+        sku: {type: string, example: SKU-01}
+        qty: {type: integer, minimum: 1, maximum: 10000}
+        proposedBy: {type: string, maxLength: 60}
+    PurchaseOrder:
+      type: object
+      required: [id, sku, qty, status, createdAt, expectedAt]
+      properties:
+        id: {type: integer, format: int64}
+        sku: {type: string}
+        qty: {type: integer}
+        status: {$ref: '#/components/schemas/PurchaseStatus'}
+        proposedBy: {type: string}
+        approvedBy: {type: string, nullable: true}
+        createdAt: {type: string, format: date-time}
+        expectedAt: {type: string, format: date-time}
+        receivedAt: {type: string, format: date-time, nullable: true}
+    PackLine:
+      type: object
+      required: [sku, qty]
+      additionalProperties: false
+      properties:
+        sku: {type: string}
+        qty: {type: integer, minimum: 1, maximum: 50}
+    PackingInput:
+      type: object
+      required: [orderCode, lines]
+      additionalProperties: false
+      properties:
+        orderCode: {type: string, example: LP-DEMO01}
+        lines: {type: array, minItems: 1, maxItems: 20, items: {$ref: '#/components/schemas/PackLine'}}
+    PackingJob:
+      type: object
+      required: [id, orderCode, boxCount, boxes, pieceVolume, boxCapacity, fillPct, packedAt]
+      properties:
+        id: {type: integer, format: int64}
+        orderCode: {type: string}
+        boxCount: {type: integer, minimum: 1}
+        boxes: {type: array, items: {type: integer, minimum: 1}, description: volumen usado en cada caja}
+        pieceVolume: {type: integer}
+        boxCapacity: {type: integer}
+        fillPct: {type: number}
+        packedAt: {type: string, format: date-time}
+    Error:
+      type: object
+      required: [error]
+      properties: {error: {type: string}, status: {type: integer}, code: {type: string, example: FALTA_PRODUCTO}}
+  responses:
+    Unauthorized:
+      description: Falta la clave X-Api-Key o es inválida
+      headers:
+        X-Request-Id: {$ref: '#/components/headers/RequestId'}
+        WWW-Authenticate: {schema: {type: string}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Forbidden:
+      description: La clave es válida pero no tiene el permiso (scope) que exige la operación
+      headers:
+        X-Request-Id: {$ref: '#/components/headers/RequestId'}
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    TooManyRequests:
+      description: >-
+        Límite de tasa excedido (cubeta de fichas: ráfaga 20, recarga 10 por segundo y por cliente).
+        Espere Retry-After segundos. Si responde el gateway el cuerpo es {"message":"RATE_LIMITED"};
+        si responde el servicio, usa el esquema Error con code RATE_LIMITED.
+      headers:
+        Retry-After: {description: Segundos a esperar antes de reintentar, schema: {type: integer, minimum: 1}}
+        X-RateLimit-Limit: {description: Capacidad de la cubeta (ráfaga), schema: {type: integer}}
+        X-RateLimit-Remaining: {description: Fichas restantes, schema: {type: integer}}
+        X-Request-Id: {$ref: '#/components/headers/RequestId'}
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Error: {description: Error, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  headers:
+    RequestId: {description: Identificador de correlación (se acepta el del cliente si es seguro; si no se genera uno), schema: {type: string}}

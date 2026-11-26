@@ -1,0 +1,1 @@
+{"eventId": "7f0c1a52-0103", "eventType": "order.packed", "schemaVersion": 1, "occurredAt": "2026-11-24T14:10:00Z", "correlationId": "req-9001", "producer": "inventory-replenishment", "payload": {"jobId": 12, "orderCode": "LP-DEMO01", "boxCount": 2, "fillPct": 72.5}}

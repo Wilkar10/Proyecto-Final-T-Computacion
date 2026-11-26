@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Exclusiones de SpotBugs / Find Security Bugs. REGLA: cada exclusión lleva un comentario con la razón.
+     Ejemplo (no activo):
+     <Match><Class name="~.*\.dto\..*"/><Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/></Match>   registros/DTO inmutables por diseño -->
+<FindBugsFilter>
+  <!-- Los records y DTO de transporte exponen sus campos por contrato; el ruido de EI_EXPOSE_REP no es una vulnerabilidad aquí. -->
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+  </Match>
+  <!-- Entidades JPA (domain): Hibernate necesita constructores sin argumentos y acceso a campos. -->
+  <Match>
+    <Class name="~com\.logistpulse\.lab\.domain\..*"/>
+    <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2,NP_NONNULL_FIELD_NOT_INITIALIZED_IN_CONSTRUCTOR"/>
+  </Match>
+</FindBugsFilter>

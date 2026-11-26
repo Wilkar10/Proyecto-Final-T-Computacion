@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "order-dispatched.v1.json",
+  "title": "Payload de order.dispatched v1",
+  "type": "object",
+  "required": ["orderCode", "robot", "tripId"],
+  "properties": {
+    "orderCode": {"type": "string"},
+    "robot": {"type": "string"},
+    "tripId": {"type": "integer"},
+    "stopIndex": {"type": "integer", "minimum": 1, "description": "Opcional (cambio compatible añadido en 1.1)"}
+  },
+  "additionalProperties": false
+}

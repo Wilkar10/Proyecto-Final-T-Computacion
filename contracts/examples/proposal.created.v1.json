@@ -1,0 +1,4 @@
+{"eventId": "9b3d7e10-0003", "eventType": "proposal.created", "schemaVersion": 1, "occurredAt": "2026-11-24T14:04:30Z",
+ "correlationId": "req-8841", "producer": "dispatch-decision",
+ "payload": {"proposalId": "p3f9a", "robot": "AMR-01", "orders": ["LP-DEMO05", "LP-DEMO01"], "cost": 22,
+             "algorithm": "held-karp", "exact": true, "status": "PENDING_APPROVAL"}}

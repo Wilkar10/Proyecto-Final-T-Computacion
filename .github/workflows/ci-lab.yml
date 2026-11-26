@@ -1,0 +1,56 @@
+name: ci-lab
+on:
+  push:
+    branches: [main]
+    paths: ['base/lab/**', '.github/workflows/ci-lab.yml']
+  pull_request:
+    paths: ['base/lab/**', '.github/workflows/ci-lab.yml']
+permissions:
+  contents: read
+concurrency:
+  group: ci-lab-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Compilar y probar
+        run: mvn -B verify
+        working-directory: base/lab
+      - name: Cobertura JaCoCo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: base/lab/target/site/jacoco
+      - name: Informes de pruebas (solo si falla)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: base/lab/target/surefire-reports
+  image:
+    needs: build-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: base/lab
+          push: false
+          load: true
+          tags: logistpulse-lab:ci
+      # Cadena de suministro: falla si la imagen trae vulnerabilidades CRITICAL/HIGH con corrección disponible
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: logistpulse-lab:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'

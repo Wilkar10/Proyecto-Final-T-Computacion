@@ -1,0 +1,51 @@
+name: ci-deber-dsm
+on:
+  push:
+    branches: [main]
+    paths: ['deberes/desarrollo-software/**', '.github/**', 'docker-compose.yml', 'base/lab/**']
+  pull_request:
+    paths: ['deberes/desarrollo-software/**', '.github/**', 'docker-compose.yml', 'base/lab/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-deber-dsm-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  pipeline-quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deberes/desarrollo-software
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pytest pyyaml
+      - name: Base (bloqueante)
+        run: python -m pytest -q
+  e2e:
+    # Integración real contra el stack del lab. Manual: gasta minutos y necesita Docker.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Levantar el lab
+        run: docker compose up -d --build db redis rabbitmq carrier-mock api
+      - name: Esperar la API
+        run: |
+          for i in $(seq 1 60); do curl -fs localhost:8080/actuator/health >/dev/null && exit 0; sleep 3; done
+          docker compose logs api; exit 1
+      - name: Prueba de humo
+        run: LAB_API_KEY=lab-dev-dispatcher-key bash base/lab/scripts/smoke.sh
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pytest pyyaml
+      - name: Pruebas de contrato agente ↔ lab
+        run: LAB_URL=http://localhost:8080 LAB_API_KEY=lab-dev-dispatcher-key python -m pytest -q tests/test_contract.py
+        working-directory: deberes/desarrollo-software
+      - name: Apagar
+        if: always()
+        run: docker compose down -v

@@ -1,0 +1,6 @@
+# Configuración de Bandit (SAST de Python). Se usa con:  bandit -r <rutas> -c .bandit -x '*/tests/*,deberes/bases-de-datos/ci/*'
+# (las exclusiones de rutas van en -x porque Bandit no las lee del YAML; ver Makefile y .github/workflows/ci-seguridad-sast.yml)
+#   -x '*/tests/*'                  las pruebas usan assert (B101) y datos falsos a propósito
+#   -x deberes/bases-de-datos/ci/*  script de CI contra un Postgres desechable: asserts y SQL con valores propios
+skips:
+  - B311   # random.Random(semilla): simulación REPRODUCIBLE (decision_lab y seed); no es criptografía

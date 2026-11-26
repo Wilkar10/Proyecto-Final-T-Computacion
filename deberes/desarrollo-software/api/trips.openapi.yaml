@@ -1,0 +1,27 @@
+# Contrato (contract-first) del endpoint que deben implementar en el lab (Java / Jersey).
+openapi: 3.0.3
+info: {title: LOGISTPULSE Lab · trips, version: 1.0.0}
+paths:
+  /api/trips:
+    post:
+      summary: Despacha UN viaje multi-parada con un robot, de forma atómica
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, maxLength: 64}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [robot, orders]
+              properties:
+                robot:  {type: string, example: AMR-01}
+                orders: {type: array, minItems: 1, maxItems: 12, items: {type: string}, example: [LP-DEMO05, LP-DEMO01]}
+      responses:
+        '201': {description: "Viaje creado: todos los pedidos pasan a DISPATCHED con el MISMO robot; batería descontada por el costo total del ciclo; evento order.dispatched por pedido vía Outbox"}
+        '200': {description: "Repetición con la misma Idempotency-Key: devuelve el viaje ya creado, sin efectos nuevos"}
+        '400': {description: "Cuerpo inválido (lista vacía, duplicados, > 12 pedidos)"}
+        '404': {description: "Robot o pedido inexistente"}
+        '409': {description: "Robot no libre o sin batería suficiente (< reserva), o algún pedido ya no está CREATED. No se aplica NADA (todo o nada)"}
+        '422': {description: "Algún destino es inalcanzable en el plano"}
+components: {}

@@ -1,0 +1,140 @@
+openapi: 3.0.3
+info:
+  title: LOGISTPULSE · Decisión de despacho (agente)
+  version: 1.1.0
+  description: |
+    Contexto acotado "Decisión de despacho". Autonomía nivel 1: el servicio SOLO propone;
+    ejecutar exige aprobación humana (X-Approver). Contrato-primero.
+servers:
+  - {url: "http://localhost:8090", description: "directo al servicio (sin clave ni límite de tasa; solo desarrollo)"}
+  - {url: "http://localhost:8000/decision/v1", description: "vía gateway (Kong): exige X-Api-Key, aplica permisos y límite de tasa"}
+security:
+  - ApiKey: []
+x-gateway: {public_base_path: /decision/v1, upstream_prefix: /, enforced_by: [gateway]}
+paths:
+  /health:
+    get:
+      operationId: health
+      x-required-scope: read
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '200': {description: UP}
+  /plan:
+    post:
+      operationId: createPlan
+      x-required-scope: write
+      summary: Calcula una propuesta de viaje (no ejecuta nada)
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '201': {description: Propuesta creada, content: {application/json: {schema: {$ref: '#/components/schemas/Proposal'}}}}
+        '409': {description: No hay propuesta viable (sin robot/pedidos o validador la rechazó), content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /proposals:
+    get:
+      operationId: listProposals
+      x-required-scope: read
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '200': {description: Propuestas, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Proposal'}}}}}
+  /proposals/{id}:
+    get:
+      operationId: getProposal
+      x-required-scope: read
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '200': {description: Propuesta, content: {application/json: {schema: {$ref: '#/components/schemas/Proposal'}}}}
+        '404': {description: No encontrada, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /proposals/{id}/approve:
+    post:
+      operationId: approveProposal
+      x-required-scope: write
+      summary: Aprueba y ejecuta (un humano). Segunda aprobación del mismo id => 409
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: X-Approver, in: header, required: true, schema: {type: string, minLength: 1}}
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '200': {description: Propuesta EXECUTED (o FAILED), content: {application/json: {schema: {$ref: '#/components/schemas/Proposal'}}}}
+        '404': {description: No encontrada, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        '409': {description: Estado no permite la acción, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /proposals/{id}/reject:
+    post:
+      operationId: rejectProposal
+      x-required-scope: write
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: X-Approver, in: header, required: true, schema: {type: string, minLength: 1}}
+      responses:
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '200': {description: Propuesta REJECTED, content: {application/json: {schema: {$ref: '#/components/schemas/Proposal'}}}}
+        '404': {description: No encontrada, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        '409': {description: Estado no permite la acción, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+components:
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: |
+        Clave por cliente, validada por el gateway (y por el servicio fleet-orders como defensa en profundidad).
+        Permisos: `read` = GET/HEAD/OPTIONS; `write` = POST/PUT/PATCH/DELETE (ver `x-required-scope` en cada operación).
+  schemas:
+    Proposal:
+      type: object
+      required: [proposal_id, robot, order_codes, cost, budget, battery_before, algorithm, exact, rationale, source, status]
+      properties:
+        proposal_id: {type: string}
+        robot: {type: string}
+        order_codes: {type: array, minItems: 1, maxItems: 12, items: {type: string}}
+        cost: {type: integer, minimum: 0}
+        budget: {type: integer, minimum: 0}
+        battery_before: {type: integer, minimum: 0, maximum: 100}
+        algorithm: {type: string}
+        exact: {type: boolean}
+        rationale: {type: string}
+        source: {type: string, enum: [rule, llm, fallback]}
+        status: {type: string, enum: [PENDING_APPROVAL, APPROVED, REJECTED, EXECUTED, FAILED]}
+        created_at: {type: string}
+        decided_by: {type: string, nullable: true}
+        detail: {type: object}
+    Error:
+      type: object
+      required: [error]
+      properties: {error: {type: string}, status: {type: integer}, code: {type: string, example: UNAUTHORIZED}}
+  responses:
+    Unauthorized:
+      description: Falta la clave X-Api-Key o es inválida (la valida el gateway). En approve/reject también se usa cuando falta el encabezado X-Approver (lo valida el servicio).
+      headers:
+        X-Request-Id: {$ref: '#/components/headers/RequestId'}
+        WWW-Authenticate: {schema: {type: string}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Forbidden:
+      description: La clave es válida pero no tiene el permiso (scope) que exige la operación
+      headers:
+        X-Request-Id: {$ref: '#/components/headers/RequestId'}
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    TooManyRequests:
+      description: >-
+        Límite de tasa excedido (cubeta de fichas: ráfaga 20, recarga 10 por segundo y por cliente).
+        Espere Retry-After segundos. Si responde el gateway el cuerpo es {"message":"RATE_LIMITED"};
+        si responde el servicio, usa el esquema Error con code RATE_LIMITED.
+      headers:
+        Retry-After: {description: Segundos a esperar antes de reintentar, schema: {type: integer, minimum: 1}}
+        X-RateLimit-Limit: {description: Capacidad de la cubeta (ráfaga), schema: {type: integer}}
+        X-RateLimit-Remaining: {description: Fichas restantes, schema: {type: integer}}
+        X-Request-Id: {$ref: '#/components/headers/RequestId'}
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+  headers:
+    RequestId: {description: Identificador de correlación (se acepta el del cliente si es seguro; si no se genera uno), schema: {type: string}}

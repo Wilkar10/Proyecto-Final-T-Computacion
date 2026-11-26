@@ -1,0 +1,50 @@
+# Análisis de integración · agente de IA + Simulador P/NP + Lakehouse + Lab
+
+## 1. Qué hay en cada pieza entregada
+| Pieza | Materia | Qué aporta | Qué le falta |
+|---|---|---|---|
+| Simulador P/NP/NP-completo (HTML) | Teoría | 10 casos (3 en P, 4 en NP, 3 NP-completos) con correos, datos y rúbrica por caso | No es código reutilizable: es una página autónoma |
+| `logistpulse-lakehouse` | Bases de Datos | Postgres (ODS, master, DW estrella, marts, cubo), MinIO, Redpanda, Grafana, ML | No hay capa para un agente ni gate de calidad (sugerido como extensión) |
+| `logistpulse-lab` | Desarrollo de SW | API Jersey/Spring, A* sobre grilla, Redis, RabbitMQ, WireMock, Prometheus, Grafana, devcontainer | Originalmente sin CI/CD y con un pedido por robot (ya resueltos en este zip: `/api/trips`, Outbox, CI/CD) |
+
+## 2. Qué agente de los analizados en el Deber 3
+El **mismo patrón**: asistente que **sugiere** (autonomía nivel 1 de 4), con herramientas de solo lectura, salida estructurada, **validador determinista**, regla de respaldo, límites de pasos/tiempo, registro y **aprobación humana**. Cambia el dominio: el Deber 3 describe una *reposición de inventario*; los tres artefactos subidos giran en torno a **despacho** (pedidos, flota AMR, rutas, batería). Por eso el proyecto final adopta un **asistente de despacho multi-parada**: elige un robot y los pedidos que caben en su batería. **Decisión pendiente tuya:** o se ajusta el contexto del Deber 3 a «despacho», o se mantiene «reposición» en el Deber 3 y se presenta el despacho como segunda aplicación del mismo patrón.
+
+## 3. Dónde aparece el problema tipo NP (y qué se evalúa)
+Dado un robot con batería *B* y un conjunto de pedidos, decidir si existe un ciclo desde el CD que visite todos los destinos con costo ≤ *B* − reserva es el **TSP en versión de decisión (caso c2 del simulador, NP-completo)**. La matriz de costos se obtiene con Dijkstra sobre la grilla (caso p2, en P). Elegir *qué* pedidos subir es un problema de selección con el mismo presupuesto (NP-difícil). SAT (c1: franjas de carga) y cobertura de vértices (c3: equipos de inspección) quedan como casos de estudio en el informe de Teoría. El agente no calcula el recorrido: lo hace un **solver** y lo verifica un **certificado polinomial**; así se evalúa en la práctica cuándo conviene exacto (fuerza bruta, Held-Karp) o heurístico (vecino más cercano + 2-opt) y qué significa un «no».
+
+## 4. Arquitectura y por qué los deberes son independientes
+Puertos y adaptadores: el agente depende de tres interfaces; cada deber aporta **un** adaptador, y sin él funciona el adaptador base.
+| Deber | Puerto | Variable | Base si no se entrega | Puede correr sin los otros |
+|---|---|---|---|---|
+| Teoría | `SolverPort` | `LP_SOLVER_PLUGIN` | fuerza bruta (n ≤ 8) / vecino más cercano | Sí: pruebas y benchmark propios |
+| Bases de Datos | `DataPort` + sumidero de auditoría | `LP_DATA_PLUGIN`, `LP_AUDIT_PLUGIN` | fixture JSON + auditoría JSONL | Sí: solo necesita el lakehouse |
+| Desarrollo de SW | `ActuatorPort` | `LP_ACTUATOR_PLUGIN` | actuador en seco / un pedido a la vez | Sí: solo necesita el lab |
+| Diseño de Sistemas | composición (`lp_patterns.compose`) | — (se importa) | agente base sin patrones | Sí: solo usa `base/agent` |
+
+**Giro de enfoque:** inicialmente cada deber era una tarea de programación con pruebas rojas. Ahora **el sistema está implementado** (todo lo que antes eran tareas) y los estudiantes **exponen y hacen análisis estratégico** (`GUIA_EXPOSICION_Y_ANALISIS.md`). Cada carpeta de `deberes/` tiene su README con guion de exposición, banco de preguntas y escenarios, su plantilla de análisis, sus pruebas (todas verdes) y su CI con filtro de rutas.
+
+## 5. Hallazgos en los artefactos originales (y qué se hizo)
+1. **Choques de puertos y volúmenes** al correr ambos stacks: `grafana` y `pgdata` se repetían. En el lab: `grafana` → `grafana-ops` (puerto 3001) y volumen `pgdata` → `labdata`. README, LAB.md y devcontainer del lab actualizados.
+2. **`lp.seed` hace `TRUNCATE` de `master.customer`**: una clave foránea desde `agent.*` lo impediría. La conformación cliente-lab ↔ cliente-lakehouse es una tabla sin FK más un control de calidad.
+3. **Los nombres de clientes no coinciden** entre lab y lakehouse (`Supermaxi Cumbayá` vs `Cliente 001`): `agent.lab_customer_map` los concilia (demo con 3 clientes).
+4. **Modelo de batería:** el lab descuenta 1 % por unidad de costo de ruta; para un ciclo cerrado el agente usa el costo total del ciclo y respeta la reserva de 20 %. Es un supuesto documentado, que el deber de DSM debe alinear con `POST /api/trips`.
+5. **El lab no tenía CI/CD:** se añadió pipeline base para todos los componentes y CD por etiqueta.
+
+## 6. Qué se verificó y qué no
+| Verificado aquí | No se pudo verificar aquí (sin Docker daemon, sin Maven Central, sin Postgres) |
+|---|---|
+| 21 pruebas del agente (incluye un modelo de lenguaje **simulado**: alucinaciones, límite de pasos, validador, respaldo, aprobación humana, API HTTP) | Compilación y pruebas Java del lab (`mvn verify`): `TripTx`, `TripService`, Outbox, JaCoCo, 7 pruebas nuevas. **Maven no resuelve dependencias aquí; el Java es código sin compilar** |
+| 309 pruebas Python: agente 21 · laboratorio de decisión 27 (24 + 3 de `refdata`, con archivos mínimos) · Teoría 186 (+40: mochila, empaque, cobertura, asignación, plazos, datos y ejecución del notebook con datos de ejemplo) · BD 14 (sintaxis pglast) · DSM 19 (+5 de contrato omitidas sin lab vivo) · Diseño 14 · **contratos 28: 10 de contrato (el agente real cumple su OpenAPI) + 11 de coherencia gateway↔lab↔contrato + 6 del humo de seguridad contra un servidor falso con fallos inyectados**; Bandit y pip-audit ejecutados de verdad; script Lua del límite probado en Redis 7; benchmark de Teoría medido | Construcción de imágenes y arranque real del stack (`docker compose up`), arranque de Kong, compilación Maven de los filtros de seguridad y **la ejecución de cualquier workflow en GitHub Actions** (Semgrep, Trivy, SpotBugs, ZAP) |
+| `docker compose config` del stack integrado; sintaxis de todo el SQL (pglast); YAML de los workflows | Ejecución del SQL y de `ci/e2e_pg.py` contra Postgres (la corre el CI `ci-bd`, primera ejecución = primera verificación) |
+| Valores de costo de ruta idénticos a `AStarPathfinderTest.java` | Adaptador `llm_anthropic.py` contra la API real |
+
+## 7. Decisiones de diseño tomadas al implementar
+- **Teoría sobre el lakehouse (`notebooks/02_teoria_sobre_el_lakehouse.ipynb`):** el análisis P/NP se hace en el JupyterLab del lakehouse con los pedidos pendientes, pesos, plazos y transportistas de Postgres; sin base, usa datos de ejemplo y lo avisa. Se agregaron mochila, empaque, cobertura, asignación a varios robots y recorrido con plazos (`np_lab/logistica.py`). **Supuestos** (no están en la base): coordenadas por zona, capacidad por tipo de vehículo, margen de plazo (0,7). Resultados a `teoria.solver_run` y al Data Lake; tablero `grafana/teoria_solver.json`. **No verificado:** las SQL contra un Postgres real, el arranque del JupyterLab con el override (`docker compose config` sí valida) y el notebook con datos reales del lakehouse. En los datos de ejemplo las heurísticas casi igualan al óptimo; el caso de plazos que contradice a la distancia mínima aparece con el margen de plazo supuesto.
+- **Datos de referencia (`base/decision_lab/refdata`):** se evaluaron datasets de Kaggle. El «End to End Supply Chain» (India, 15.000 pedidos) se descartó para calibrar: es **sintético** (ciudad≠estado, nombre≠género, sin diferencias reales entre transportistas, prioridades ni segmentos). Se adoptan **Olist** (SLA y cancelaciones reales, Brasil) y **Favorita** (forma de demanda, Ecuador) solo como contraste. **Los cargadores no se han ejecutado con los archivos reales de Kaggle** (sin acceso); se probaron con archivos mínimos del esquema documentado. Los datos de DANEC se piden con `docs/SOLICITUD_DATOS_DANEC.md`.
+- **Microservicios y APIs dirigidas por contrato (`contracts/`, `docs/ARQUITECTURA_MICROSERVICIOS_API_FIRST.md`):** el método de Smart Inventory (canvas → OpenAPI/AsyncAPI → catálogo → validación en CI) se aplicó a LOGISTPULSE. **ADR-001:** `fleet-orders` sigue como monolito modular (invariante transaccional de `/api/trips`); el agente y el lakehouse ya son servicios separados. **Deriva real declarada:** el lab publica el id del pedido en la cola `orders.dispatched`, sin envelope ni `trip.created`; `proposal.*` y el consumidor del lakehouse son solo contrato. La línea base de compatibilidad es una copia de v1.0.0 (en CI real se compararía con la rama principal); Spectral en CI no se ejecutó aquí.
+- **Viajes:** costo = ciclo cerrado con A* por tramo; 409 si `batería − costo < 20`; `UNIQUE(idempotencyKey)` resuelve la carrera y el perdedor devuelve el resultado del ganador (200). Pedidos de un viaje no descuentan batería otra vez al entregarse; el robot se libera con el último pedido.
+- **Outbox:** garantía *al menos una vez* (el consumidor debe tolerar duplicados).
+- **Diseño de Sistemas:** se pidieron 5 patrones (Command, Strategy, Observer, Template Method + «otros 2»); se entregan **seis** (Decorator y Adapter como elegidos). Si el docente quiere exactamente cinco, se retira uno (propuesta: Adapter del LLM o Decorator de auditoría).
+- **Documentos Word** `ProyectoFinal_*.docx` (carpeta aparte, no en el zip) fueron **reescritos** (30 puntos por materia, cadena completa, rol gerencial, seis patrones en Diseño); se entregan aparte del zip.
+- **Laboratorio de decisión (`base/decision_lab`):** el objetivo del proyecto es mejorar decisiones logísticas, medido con KPIs (despachos fallidos, SLA, costo, horas-persona), no «usar un agente». Compara una línea base manual con el sistema sobre los mismos pedidos. **Todos los parámetros son supuestos ilustrativos**; sus resultados (`RESULTADOS_LAB_DECISION.md`) enseñan qué mueve cada KPI (p. ej. el ahorro cae ~75 % si el despachador manual no se equivoca) pero **no prueban ahorros reales**.

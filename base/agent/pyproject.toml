@@ -1,0 +1,22 @@
+[project]
+name = "lpagent"
+version = "1.0.0"
+description = "Asistente de despacho multi-parada de LOGISTPULSE (agente que sugiere, una persona aprueba)"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+pg = ["psycopg2-binary>=2.9"]
+llm = ["anthropic>=0.40"]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["lpagent*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["deber: pruebas de un deber (rojas hasta que se implemente)"]

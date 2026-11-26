@@ -1,0 +1,72 @@
+# Stack integrado del proyecto final LOGISTPULSE.
+#   make up            -> lab (API+Postgres+Redis+RabbitMQ+WireMock+Prometheus+Grafana-ops) + lakehouse (Postgres+MinIO+Grafana)
+#   make up-agent      -> además, el agente de despacho (perfil "agent")
+#   make up-gateway    -> además, el gateway Kong :8000 (perfil "gateway"): claves, permisos, rate limit, /api/v1
+# Puertos: 8080 API lab · 3001 Grafana lab · 9090 Prometheus · 15672 RabbitMQ · 9091 WireMock
+#          3000 Grafana lakehouse · 5432 Postgres lakehouse · 9001 MinIO · 8888 Jupyter · 8090 agente · 8000 gateway
+name: logistpulse-final
+
+include:
+  - path: ./base/lab/docker-compose.yml
+  - path: ./base/lakehouse/docker-compose.yml
+
+services:
+  agent:
+    build: ./base/agent
+    image: logistpulse-agent
+    environment:
+      PORT: "8090"
+      LP_MODE: ${LP_MODE:-lab}              # lab = lee el lab vivo; fixture = datos de ejemplo
+      LP_EXECUTE: ${LP_EXECUTE:-0}          # 1 = el actuador del lab ejecuta propuestas APROBADAS
+      LAB_URL: http://api:8080
+      LAB_API_KEY: ${LAB_API_KEY:-lab-dev-dispatcher-key}   # clave con permiso write (el agente ejecuta POST /api/trips)
+      LP_AUDIT_FILE: /data/audit.jsonl
+      PYTHONPATH: /plugins/teoria:/plugins/bd:/plugins/dsm
+      # Cada deber enchufa UN adaptador (vacío = adaptador base):
+      LP_SOLVER_PLUGIN: ${LP_SOLVER_PLUGIN:-}       # Teoría:  np_lab.plugin:build
+      LP_DATA_PLUGIN: ${LP_DATA_PLUGIN:-}           # BD:      lp_db.plugin:build
+      LP_AUDIT_PLUGIN: ${LP_AUDIT_PLUGIN:-}         # BD:      lp_db.plugin:build_sink
+      LP_ACTUATOR_PLUGIN: ${LP_ACTUATOR_PLUGIN:-}   # DSM:     lp_dsm.actuator:build
+      LP_PLANNER: ${LP_PLANNER:-rule}               # rule | llm (requiere ANTHROPIC_API_KEY y LP_LLM_MODEL)
+      PGHOST: postgres
+      PGDATABASE: logistpulse
+      PGUSER: lp_agent
+      PGPASSWORD: lp_agent
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LP_LLM_MODEL: ${LP_LLM_MODEL:-}
+    volumes:
+      - ./deberes/teoria-computacion:/plugins/teoria:ro
+      - ./deberes/bases-de-datos:/plugins/bd:ro
+      - ./deberes/desarrollo-software:/plugins/dsm:ro
+      - agentdata:/data
+    ports: ["8090:8090"]
+    profiles: ["agent"]
+
+  # API manager / gateway. DB-less: la configuración vive en base/gateway/kong.yml.
+  # La Admin API de Kong NO se publica (solo escucha dentro del contenedor).
+  gateway:
+    image: kong:3.8
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_LISTEN: 127.0.0.1:8001
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_LOG_LEVEL: notice
+    volumes:
+      - ./base/gateway/kong.yml:/kong/kong.yml:ro
+    ports: ["8000:8000"]
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    profiles: ["gateway"]
+
+volumes:
+  agentdata: {}

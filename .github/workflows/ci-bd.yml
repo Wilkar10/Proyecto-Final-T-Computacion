@@ -1,0 +1,63 @@
+name: ci-bd
+on:
+  push:
+    branches: [main]
+    paths: ['base/lakehouse/**', 'deberes/bases-de-datos/**', 'base/agent/**', '.github/workflows/ci-bd.yml']
+  pull_request:
+    paths: ['base/lakehouse/**', 'deberes/bases-de-datos/**', 'base/agent/**', '.github/workflows/ci-bd.yml']
+permissions:
+  contents: read
+concurrency:
+  group: ci-bd-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deberes/bases-de-datos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pytest pglast
+      - name: Base (bloqueante)
+        run: python -m pytest -q
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: logistpulse
+          POSTGRES_USER: lp
+          POSTGRES_PASSWORD: lp_secret
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U lp -d logistpulse" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      PGHOST: localhost
+      PGDATABASE: logistpulse
+      PGUSER: lp
+      PGPASSWORD: lp_secret
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inicializar el lakehouse (mismos scripts que docker-entrypoint-initdb.d)
+        run: |
+          for f in $(ls base/lakehouse/sql/*.sql | sort); do
+            echo ">> $f"; psql -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+      - name: Datos mínimos de maestro (para los controles)
+        run: psql -v ON_ERROR_STOP=1 -q -f deberes/bases-de-datos/ci/seed_minimal.sql
+      - name: Scripts SQL del deber
+        run: deberes/bases-de-datos/scripts/db_apply.sh
+      - name: Controles de calidad (Data Trust Gate)
+        run: deberes/bases-de-datos/scripts/db_check.sh
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Integración real agente ↔ Postgres (rol lp_agent, mínimo privilegio)
+        run: |
+          pip install psycopg2-binary
+          PYTHONPATH=base/agent:deberes/bases-de-datos python deberes/bases-de-datos/ci/e2e_pg.py

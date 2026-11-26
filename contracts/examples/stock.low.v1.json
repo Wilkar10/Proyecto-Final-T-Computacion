@@ -1,0 +1,1 @@
+{"eventId": "7f0c1a52-0101", "eventType": "stock.low", "schemaVersion": 1, "occurredAt": "2026-11-24T14:10:00Z", "correlationId": "req-9001", "producer": "inventory-replenishment", "payload": {"sku": "SKU-01", "available": 24, "minStock": 30}}

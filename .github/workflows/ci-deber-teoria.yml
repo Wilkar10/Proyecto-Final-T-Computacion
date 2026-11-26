@@ -1,0 +1,26 @@
+name: ci-deber-teoria
+on:
+  push:
+    branches: [main]
+    paths: ['deberes/teoria-computacion/**', 'base/agent/**', 'base/lakehouse/sql/05_teoria.sql', '.github/workflows/ci-deber-teoria.yml']
+  pull_request:
+    paths: ['deberes/teoria-computacion/**', 'base/agent/**', 'base/lakehouse/sql/05_teoria.sql', '.github/workflows/ci-deber-teoria.yml']
+permissions:
+  contents: read
+concurrency:
+  group: ci-deber-teoria-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deberes/teoria-computacion
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pytest pandas matplotlib pglast
+      - name: Base (bloqueante)
+        run: python -m pytest -q

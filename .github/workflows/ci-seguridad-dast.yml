@@ -1,0 +1,79 @@
+name: ci-seguridad-dast
+# DAST: análisis DINÁMICO. Necesita la aplicación EN EJECUCIÓN, por eso levanta el stack con Docker Compose dentro del runner
+# y lo ataca desde fuera (como lo haría un atacante). Corre en GitHub Actions; el mismo recorrido se puede hacer en local (make dast).
+#   Fase 1  humo de seguridad:   401 sin clave · 403 sin permiso · 429 + Retry-After · X-Request-Id  (contracts/tools/security_smoke.py)
+#   Fase 2  OWASP ZAP API scan:  usa el CONTRATO OpenAPI como mapa de ataque (contract-first también sirve para seguridad)
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 6 * * 3'        # miércoles
+  pull_request:
+    paths:
+      - 'base/lab/src/**'
+      - 'base/gateway/**'
+      - 'contracts/openapi/**'
+      - 'contracts/tools/security_smoke.py'
+      - 'docker-compose*.yml'
+      - '.github/workflows/ci-seguridad-dast.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ci-seguridad-dast-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  dast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+
+      - name: Levantar lab + gateway + agente (con los límites de producción)
+        env: {LP_MODE: fixture}
+        run: docker compose --profile gateway --profile agent up -d --build gateway agent
+
+      - name: Esperar a que todo responda
+        run: |
+          for i in $(seq 1 90); do
+            c=$(curl -s -o /dev/null -w '%{http_code}' -H 'X-Api-Key: lab-dev-viewer-key' http://localhost:8000/api/v1/robots || true)
+            a=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8090/health || true)
+            [ "$c" = "200" ] && [ "$a" = "200" ] && exit 0
+            sleep 4
+          done
+          docker compose --profile gateway --profile agent logs --tail=80; exit 1
+
+      - name: Fase 1 · Humo de seguridad (gateway y servicio directo)
+        run: python3 contracts/tools/security_smoke.py --gateway http://localhost:8000 --service http://localhost:8080
+
+      - name: Subir el límite de tasa SOLO para el escaneo
+        # ZAP lanza cientos de peticiones: con el límite de producción todo sería 429 y el escaneo no probaría nada.
+        # Es el mismo código con otros números; el comportamiento del límite ya quedó probado en la fase 1.
+        env: {LAB_RATE_BURST: '100000', LAB_RATE_REFILL: '100000'}
+        run: |
+          docker compose up -d --force-recreate --no-deps api
+          for i in $(seq 1 60); do curl -fs http://localhost:8080/actuator/health >/dev/null && exit 0; sleep 3; done
+          docker compose logs api; exit 1
+
+      - name: Fase 2 · OWASP ZAP API scan (fleet-orders y dispatch-decision)
+        run: |
+          rc1=0; rc2=0
+          bash base/gateway/run_zap.sh fleet-orders.v1.yaml http://localhost:8080 zap-fleet-orders lab-dev-dispatcher-key zap-out || rc1=$?
+          bash base/gateway/run_zap.sh dispatch-decision.v1.yaml http://localhost:8090 zap-dispatch-decision lab-dev-dispatcher-key zap-out || rc2=$?
+          echo "fleet-orders=$rc1 dispatch-decision=$rc2"
+          # Falla con reglas FAIL (1) o error de ZAP (>=3). Los avisos (2) quedan en el informe para revisar.
+          for rc in $rc1 $rc2; do if [ "$rc" = "1" ] || [ "$rc" -ge 3 ]; then exit 1; fi; done
+
+      - name: Informes de ZAP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-informes
+          path: zap-out
+          if-no-files-found: ignore
+      - name: Registros del stack si algo falló
+        if: failure()
+        run: docker compose --profile gateway --profile agent logs --tail=200
+      - name: Apagar
+        if: always()
+        run: docker compose --profile gateway --profile agent down -v

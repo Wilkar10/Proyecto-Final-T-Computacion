@@ -1,0 +1,20 @@
+{
+  "name": "LOGISTPULSE · proyecto final",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": { "version": "21", "installMaven": "true" },
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.12" },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "hostRequirements": { "cpus": 4, "memory": "8gb" },
+  "forwardPorts": [8080, 8090, 3000, 3001, 9090, 15672, 9001, 8888],
+  "portsAttributes": {
+    "8080": { "label": "API + consola del lab" },
+    "8090": { "label": "Agente de despacho" },
+    "3000": { "label": "Grafana lakehouse" },
+    "3001": { "label": "Grafana lab" },
+    "9001": { "label": "MinIO" }
+  },
+  "postCreateCommand": "pip install pytest pglast psycopg2-binary && (cd base/lab && mvn -B -q dependency:go-offline || true)",
+  "customizations": { "vscode": { "extensions": ["vscjava.vscode-java-pack", "ms-python.python", "ms-azuretools.vscode-docker", "humao.rest-client"] } }
+}

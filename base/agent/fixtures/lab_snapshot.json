@@ -1,0 +1,16 @@
+{
+  "origin": [0, 0],
+  "robots": [
+    {"code": "AMR-01", "x": 0, "y": 0, "battery": 100, "status": "IDLE"},
+    {"code": "AMR-02", "x": 0, "y": 0, "battery": 90, "status": "IDLE"},
+    {"code": "AMR-05", "x": 0, "y": 0, "battery": 15, "status": "IDLE"}
+  ],
+  "orders": [
+    {"code": "LP-DEMO01", "customer": "Supermaxi Cumbayá", "destX": 11, "destY": 7},
+    {"code": "LP-DEMO02", "customer": "Farmacia Cruz Azul", "destX": 5, "destY": 3},
+    {"code": "LP-DEMO03", "customer": "Ferretería La 10", "destX": 10, "destY": 5},
+    {"code": "LP-DEMO04", "customer": "Farmacia Cruz Azul", "destX": 2, "destY": 2},
+    {"code": "LP-DEMO05", "customer": "Supermaxi Cumbayá", "destX": 8, "destY": 0}
+  ],
+  "priorities": {"Supermaxi Cumbayá": 3.0, "Farmacia Cruz Azul": 2.0, "Ferretería La 10": 1.0}
+}

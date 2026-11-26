@@ -1,0 +1,55 @@
+# Catálogo de APIs de LOGISTPULSE (índice descubrible). Catálogo ≠ contrato:
+# aquí solo se lista QUÉ existe, quién es dueño y dónde está el contrato; el detalle vive en openapi/ y asyncapi/.
+catalog_version: 1
+domain: logistpulse
+services:
+  - name: fleet-orders
+    bounded_context: Pedidos y Flota
+    owner: equipo-lab            # POR ASIGNAR (supuesto)
+    lifecycle: production-lite   # experimental | production-lite | deprecated
+    implementation: base/lab     # hoy es un monolito Spring/Jersey (ver docs/ARQUITECTURA_MICROSERVICIOS_API_FIRST.md)
+    apis:
+      - {kind: openapi,  contract: openapi/fleet-orders.v1.yaml, version: 1.1.0, base_path: /api, public_base_path: /api/v1}
+      - {kind: asyncapi, contract: asyncapi/logistpulse-events.v1.yaml, version: 1.0.0, role: producer}
+  - name: inventory-replenishment
+    bounded_context: Inventario, reposición y packing
+    owner: equipo-inventario     # POR ASIGNAR (supuesto)
+    lifecycle: experimental
+    implementation: base/lab     # mismo monolito modular que fleet-orders; se separa si un disparador medible lo justifica (ADR-001)
+    gateway_service: fleet-orders  # mismo servicio Kong (mismo upstream) y por tanto la misma ruta /api/v1, clave y límite de tasa
+    apis:
+      - {kind: openapi,  contract: openapi/inventory-replenishment.v1.yaml, version: 1.0.0, base_path: /api, public_base_path: /api/v1}
+      - {kind: asyncapi, contract: asyncapi/logistpulse-events.v1.yaml, version: 1.0.0, role: producer}
+  - name: dispatch-decision
+    bounded_context: Decisión de despacho
+    owner: equipo-agente         # POR ASIGNAR (supuesto)
+    lifecycle: experimental
+    implementation: base/agent   # ya es un proceso separado (Python)
+    apis:
+      - {kind: openapi,  contract: openapi/dispatch-decision.v1.yaml, version: 1.1.0, base_path: /, public_base_path: /decision/v1}
+      - {kind: asyncapi, contract: asyncapi/logistpulse-events.v1.yaml, version: 1.0.0, role: producer}
+  - name: analytics-lakehouse
+    bounded_context: Analítica y calidad de datos
+    owner: equipo-datos          # POR ASIGNAR (supuesto)
+    lifecycle: experimental
+    implementation: base/lakehouse
+    apis:
+      - {kind: asyncapi, contract: asyncapi/logistpulse-events.v1.yaml, version: 1.0.0, role: consumer}
+gateway:                         # API manager: punto único de entrada (base/gateway/kong.yml)
+  product: kong
+  config: base/gateway/kong.yml
+  listen_port: 8000
+  auth: {scheme: apiKey, header: X-Api-Key, scopes: [read, write]}
+  rate_limit: {burst: 20, refill_per_second: 10, per: consumer, status: 429, header: Retry-After}
+  correlation_header: X-Request-Id
+events:
+  - {name: order.dispatched,   schema: schemas/order-dispatched.v1.json,   producer: fleet-orders,      consumers: [analytics-lakehouse]}
+  - {name: trip.created,       schema: schemas/trip-created.v1.json,       producer: fleet-orders,      consumers: [analytics-lakehouse, dispatch-decision]}
+  - {name: proposal.created,   schema: schemas/proposal-event.v1.json,     producer: dispatch-decision, consumers: [analytics-lakehouse]}
+  - {name: stock.low,          schema: schemas/stock-low.v1.json,          producer: inventory-replenishment, consumers: []}
+  - {name: purchase.received,  schema: schemas/purchase-received.v1.json, producer: inventory-replenishment, consumers: []}
+  - {name: order.packed,       schema: schemas/order-packed.v1.json,      producer: inventory-replenishment, consumers: []}
+  - {name: proposal.decided,   schema: schemas/proposal-event.v1.json,     producer: dispatch-decision, consumers: [analytics-lakehouse]}
+versioning:
+  compatible_change: "nueva versión MINOR del mismo /v1 (campo opcional nuevo, endpoint nuevo, valor de enum que el cliente ya ignora)"
+  breaking_change: "nueva versión MAYOR: /v2 y schemaVersion 2; /v1 convive hasta que el último consumidor migre"

@@ -1,0 +1,9 @@
+version: 2
+updates:
+  - {package-ecosystem: maven, directory: /base/lab, schedule: {interval: weekly}}
+  - {package-ecosystem: pip, directory: /base/agent, schedule: {interval: weekly}}
+  - {package-ecosystem: docker, directory: /base/lab, schedule: {interval: weekly}}
+  - {package-ecosystem: docker, directory: /base/agent, schedule: {interval: weekly}}
+  - {package-ecosystem: github-actions, directory: /, schedule: {interval: weekly}}
+  - {package-ecosystem: pip, directory: /base/lakehouse/services, schedule: {interval: weekly}}
+  - {package-ecosystem: docker, directory: /base/lakehouse/services, schedule: {interval: weekly}}

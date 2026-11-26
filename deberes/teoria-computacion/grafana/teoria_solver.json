@@ -1,0 +1,196 @@
+{
+ "title": "LOGISTPULSE · Teoría de la Computación (solvers)",
+ "uid": "lp-teoria-solver",
+ "schemaVersion": 39,
+ "version": 1,
+ "editable": true,
+ "time": {
+  "from": "now-30d",
+  "to": "now"
+ },
+ "tags": [
+  "logistpulse",
+  "teoria"
+ ],
+ "panels": [
+  {
+   "id": 1,
+   "type": "stat",
+   "title": "Corridas registradas",
+   "gridPos": {
+    "h": 4,
+    "w": 6,
+    "x": 0,
+    "y": 0
+   },
+   "datasource": {
+    "type": "postgres",
+    "uid": "lakehouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT COUNT(*) AS corridas FROM teoria.solver_run"
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "type": "stat",
+   "title": "Corridas con algoritmo exacto (%)",
+   "gridPos": {
+    "h": 4,
+    "w": 6,
+    "x": 6,
+    "y": 0
+   },
+   "datasource": {
+    "type": "postgres",
+    "uid": "lakehouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT ROUND(100.0*AVG(CASE WHEN exacto THEN 1 ELSE 0 END),1) AS exactas FROM teoria.solver_run"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent"
+    },
+    "overrides": []
+   }
+  },
+  {
+   "id": 3,
+   "type": "stat",
+   "title": "Brecha máxima de las heurísticas (%)",
+   "gridPos": {
+    "h": 4,
+    "w": 6,
+    "x": 12,
+    "y": 0
+   },
+   "datasource": {
+    "type": "postgres",
+    "uid": "lakehouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT COALESCE(MAX(brecha_pct),0) AS brecha FROM teoria.solver_run WHERE NOT exacto"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent"
+    },
+    "overrides": []
+   }
+  },
+  {
+   "id": 4,
+   "type": "stat",
+   "title": "Fuente de los datos",
+   "gridPos": {
+    "h": 4,
+    "w": 6,
+    "x": 18,
+    "y": 0
+   },
+   "datasource": {
+    "type": "postgres",
+    "uid": "lakehouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT CASE WHEN BOOL_OR(fuente='lakehouse') THEN 'lakehouse' ELSE 'ejemplo' END AS fuente FROM teoria.solver_run"
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "type": "bargauge",
+   "title": "Brecha por problema y algoritmo heurístico (%)",
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 0,
+    "y": 4
+   },
+   "datasource": {
+    "type": "postgres",
+    "uid": "lakehouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT problema || ' · ' || algoritmo AS metric, ROUND(MAX(brecha_pct),2) AS brecha FROM teoria.solver_run WHERE NOT exacto AND brecha_pct IS NOT NULL GROUP BY 1 ORDER BY 2 DESC"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent"
+    },
+    "overrides": []
+   }
+  },
+  {
+   "id": 6,
+   "type": "table",
+   "title": "TSP: segundos por número de paradas (exactos)",
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 12,
+    "y": 4
+   },
+   "datasource": {
+    "type": "postgres",
+    "uid": "lakehouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT n AS paradas, algoritmo, ROUND(AVG(segundos)::numeric,5) AS segundos FROM teoria.solver_run WHERE problema='tsp' AND exacto GROUP BY n, algoritmo ORDER BY n, algoritmo"
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "type": "table",
+   "title": "Última corrida de cada algoritmo",
+   "gridPos": {
+    "h": 9,
+    "w": 24,
+    "x": 0,
+    "y": 13
+   },
+   "datasource": {
+    "type": "postgres",
+    "uid": "lakehouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT DISTINCT ON (problema, algoritmo, n) problema, algoritmo, n, exacto, valor, optimo, brecha_pct, segundos, fuente, ts FROM teoria.solver_run ORDER BY problema, algoritmo, n, ts DESC"
+    }
+   ]
+  }
+ ]
+}
