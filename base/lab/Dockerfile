@@ -8,7 +8,7 @@ COPY src ./src
 RUN mvn -B -q -DskipTests package
 
 # ---- Etapa 2: ejecutar ----
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 WORKDIR /app
 RUN useradd --system --no-create-home appuser
 COPY --from=build /build/target/app.jar app.jar
