@@ -6,5 +6,5 @@ pyarrow>=16
 scikit-learn>=1.5,<2
 confluent-kafka>=2.5
 duckdb>=1.0
-jupyterlab>=4
+jupyterlab>=4.6.6
 matplotlib>=3.8
